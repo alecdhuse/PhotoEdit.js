@@ -338,7 +338,7 @@ UPLOAD_PREVIEW.prototype.crop_button  = function(up_obj) {
     }
 };
 
-UPLOAD_PREVIEW.prototype.draw  = function(up_obj, ev) {
+UPLOAD_PREVIEW.prototype.draw = function(up_obj, ev) {
     this._paper_scope.project.clear();
 
     var img = new Image();
@@ -382,204 +382,28 @@ UPLOAD_PREVIEW.prototype.hide_photo_help = function() {
 };
 
 UPLOAD_PREVIEW.prototype.read_exif  = function(file) {
-    var binaryReader = new FileReader();
-    var filePart = "";
+    var reader = new FileReader();
 
-    if (file.slice) {
-        filePart = file.slice(0, 131072);
-    } else if (file.webkitSlice) {
-        filePart = file.webkitSlice(0, 131072);
-    } else if (file.mozSlice) {
-        filePart = file.mozSlice(0, 131072);
-    } else {
-        filePart = file;
-    }
+    reader.onload = function (event) {
+      var exif, tags, tableBody, name, row;
 
-    binaryReader.onloadend = function () {
-      var arrayBuffer = new ArrayBuffer(binaryReader.result.length);
-      var int8View = new Int8Array(arrayBuffer);
+      try {
+        exif = new ExifReader();
 
-      for (var i = 0; i < binaryReader.result.length; i++) {
-          int8View[i] = binaryReader.result[i].charCodeAt(0);
+        // Parse the Exif tags.
+        exif.load(event.target.result);
+
+        // The MakerNote tag can be really large. Remove it to lower memory usage.
+        exif.deleteTag('MakerNote');
+
+        return exif.getAllTags();
+      } catch (error) {
+          return {};
       }
+    };
 
-      this.buffer = arrayBuffer;
-
-      this.getUint8 = function(offset) {
-          if (compatibility.ArrayBuffer) {
-
-          return new Uint8Array(this.buffer, offset, 1)[0];
-          }
-          else {
-              return this.data.charCodeAt(offset) & 0xff;
-          }
-      }
-
-      this.getLongAt = function(offset,littleEndian) {
-          //DataView method
-          return new DataView(this.buffer).getUint32(offset, littleEndian);
-
-          //ArrayBufferView method always littleEndian
-          var uint32Array = new Uint32Array(this.buffer);
-          return uint32Array[offset];
-
-          //The method we are currently using
-          var b3 = this.getUint8(this.endianness(offset, 0, 4, littleEndian)),
-          b2 = this.getUint8(this.endianness(offset, 1, 4, littleEndian)),
-          b1 = this.getUint8(this.endianness(offset, 2, 4, littleEndian)),
-          b0 = this.getUint8(this.endianness(offset, 3, 4, littleEndian));
-
-          return (b3 * Math.pow(2, 24)) + (b2 << 16) + (b1 << 8) + b0;
-      }
-
-      if (dataview.getByteAt(0) != 0xFF || dataview.getByteAt(1) != 0xD8) {
-          return;
-      } else {
-          offset = 2;
-          length = dataview.length;
-
-          while (offset < length) {
-              marker = dataview.getByteAt(offset+1);
-              if (marker == 225) {
-                  readExifData(dataview, offset + 4, dataview.getShortAt(offset+2, true)-2);
-                  break;
-              }
-              else if(marker == 224) {
-                  offset = 20;
-              }
-              else {
-                  offset += 2 + dataview.getShortAt(offset+2, true);
-              }
-          }
-      }
-
-      this.readTags = function(dataview, TIFFStart, dirStart, strings, littleEndian) {
-          var entries = dataview.getShortAt(dirStart, littleEndian);
-          var tags = {};
-          var i;
-
-          for (i = 0; i < entries; i++) {
-              var entryOffset = dirStart + i*12 + 2;
-              var tag = strings[dataview.getShortAt(entryOffset, littleEndian)];
-
-              tags[tag] = this.readTagValue(dataview, entryOffset, TIFFStart, dirStart, littleEndian);
-          }
-
-          if(tags.ExifIFDPointer) {
-              var entryOffset = dirStart + i*12 + 2;
-              var IFD1Offset = dataview.getLongAt(entryOffset,littleEndian);
-
-              tags.IFD1Offset = IFD1Offset;
-          }
-
-          return tags;
-      }
-
-      if (tags.ExifIFDPointer) {
-
-          var ExifTags = ExifExtractorTags.readTags(dataview, TIFFOffset, TIFFOffset + tags.ExifIFDPointer, ExifExtractorTags.Exif.Tags, littleEndian);
-
-          for (var tag in ExifTags) {
-              switch (tag) {
-                  case "LightSource" :
-                  case "Flash" :
-                  case "MeteringMode" :
-                  case "ExposureProgram" :
-                  case "SensingMethod" :
-                  case "SceneCaptureType" :
-                  case "SceneType" :
-                  case "CustomRendered" :
-                  case "WhiteBalance" :
-                  case "GainControl" :
-                  case "Contrast" :
-                  case "Saturation" :
-                  case "Sharpness" :
-                  case "SubjectDistanceRange" :
-                  case "FileSource" :
-                      ExifTags[tag] = ExifExtractorTags.Exif.StringValues[tag][ExifTags[tag]];
-                      break;
-                  case "ExifVersion" :
-                  case "FlashpixVersion" :
-                      ExifTags[tag] = String.fromCharCode(ExifTags[tag][0], ExifTags[tag][1], ExifTags[tag][2], ExifTags[tag][3]);
-                      break;
-                  case "ComponentsConfiguration" :
-                      ExifTags[tag] =
-                          ExifExtractorTags.Exif.StringValues.Components[ExifTags[tag][0]]
-                          + ExifExtractorTags.Exif.StringValues.Components[ExifTags[tag][1]]
-                          + ExifExtractorTags.Exif.StringValues.Components[ExifTags[tag][2]]
-                          + ExifExtractorTags.Exif.StringValues.Components[ExifTags[tag][3]];
-                      break;
-              }
-
-              tags[tag] = ExifTags[tag];
-          }
-      }
-
-      if(tags.IFD1Offset) {
-          IFD1Tags = ExifExtractorTags.readTags(dataview, TIFFOffset, tags.IFD1Offset + TIFFOffset, ExifExtractorTags.Exif.TiffTags, littleEndian);
-
-          if(IFD1Tags.JPEGInterchangeFormat) {
-              readThumbnailData(dataview, IFD1Tags.JPEGInterchangeFormat, IFD1Tags.JPEGInterchangeFormatLength, TIFFOffset, littleEndian);
-          }
-      }
-
-      function readThumbnailData(dataview, ThumbStart, ThumbLength, TIFFOffset, littleEndian) {
-
-          if (dataview.length < ThumbStart+TIFFOffset+ThumbLength) {
-              return;
-          }
-
-          var data = dataview.getBytesAt(ThumbStart+TIFFOffset,ThumbLength);
-          var hexData = new Array();
-          var i;
-
-          for(i in data) {
-              if (data[i] < 16) {
-                  hexData[i] = "0"+data[i].toString(16);
-              }
-              else {
-                  hexData[i] = data[i].toString(16);
-              }
-          }
-
-          self.postMessage({guid:dataview.guid, thumb_src:"data:image/jpeg,%"+hexData.join('%')});
-      }
-
-    }
-
-    binaryReader.readAsBinaryString(filePart);
-};
-
-UPLOAD_PREVIEW.prototype.readExifData = function(dataview, start, length) {
-
-    var littleEndian;
-    var TIFFOffset = start + 6;
-
-    if (dataview.getStringAt(iStart, 4) != "Exif") {
-        return false;
-    }
-
-    if (dataview.getShortAt(TIFFOffset) == 0x4949) {
-        littleEndian = true;
-        self.postMessage({msg:"----Yes Little Endian"});
-    }
-    else if (dataview.getShortAt(TIFFOffset) == 0x4D4D) {
-        littleEndian = false;
-        self.postMessage({msg:"----Not Little Endian"});
-    }
-    else {
-        return false;
-    }
-
-    if (dataview.getShortAt(TIFFOffset+2, littleEndian) != 0x002A) {
-        return false;
-    }
-
-    if (dataview.getLongAt(TIFFOffset+4, littleEndian) != 0x00000008) {
-        return false;
-    }
-
-    var tags = ExifExtractorTags.readTags(dataview, TIFFOffset, TIFFOffset+8, ExifExtractorTags.Exif.TiffTags, littleEndian);
+    // We only need the start of the file for the Exif info.
+    reader.readAsArrayBuffer(file.slice(0, 128 * 1024));
 };
 
 UPLOAD_PREVIEW.prototype.resize_canvas = function() {
