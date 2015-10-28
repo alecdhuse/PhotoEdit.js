@@ -26,6 +26,7 @@ function UPLOAD_PREVIEW(object_id) {
     };
 
     /* Public */
+    this.exif_data = {};
     this.resize_mouse_margin = 30;
     this.upload_photo = function (data_url) {};
 };
@@ -383,6 +384,7 @@ UPLOAD_PREVIEW.prototype.hide_photo_help = function() {
 
 UPLOAD_PREVIEW.prototype.read_exif  = function(file) {
     var reader = new FileReader();
+    var photo_upload = this;
 
     reader.onload = function (event) {
       var exif, tags, tableBody, name, row;
@@ -396,9 +398,9 @@ UPLOAD_PREVIEW.prototype.read_exif  = function(file) {
         // The MakerNote tag can be really large. Remove it to lower memory usage.
         exif.deleteTag('MakerNote');
 
-        return exif.getAllTags();
+        photo_upload.exif_data = exif.getAllTags();
       } catch (error) {
-          return {};
+          photo_upload.exif_data = {};
       }
     };
 

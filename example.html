@@ -22,14 +22,15 @@
         upload_preview_obj.init("upload_photo_page_inner");
 
         upload_preview_obj.upload_photo = function(data_url) {
-            /* Use this function to override upload_photo with your own code */
             var data = {
-                'photo_data': data_url
+                'photo_data': data_url,
+                'exif_date':  upload_preview_obj.exif_data.DateTime.description,
+                'exif':       upload_preview_obj.exif_data
             };
 
             $.ajax({
                type:     'POST',
-               url:      'http://alec.dhuse.com/cs/photo_upload/add_photo.php',
+               url:      'http://theimage.space/add_photo.php',
                dataType: 'json',
                data:     data,
                success:  function(response) {
